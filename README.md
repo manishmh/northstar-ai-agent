@@ -4,6 +4,14 @@ A conversational AI sales agent built for the Northstar Homes assignment.
 
 The agent helps customers understand **Northstar One**, qualify their requirements, and arrange a simulated site visit. It supports **English, Hindi, and Hinglish** and is designed for both chat and voice-style conversations.
 
+## System Prompt
+
+The complete system prompt used by the sales agent is available here:
+
+**[View the Northstar Sales Agent System Prompt](backend/app/prompts/northstar_sales_agent.txt)**
+
+The prompt defines the agent's conversation behavior, qualification flow, language handling, objection handling, booking flow, escalation rules, and boundaries around unsupported information.
+
 ## How to Run
 
 ### Prerequisites
