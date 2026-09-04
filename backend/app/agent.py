@@ -128,167 +128,162 @@ async def process_chat(session_id: str, user_message: str) -> str:
     # Append user message
     session.conversation_history.append({"role": "user", "content": user_message})
     
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}] + session.conversation_history
-    
-    # Call LLM
-    response = await client.chat.completions.create(
-        model=get_llm_model(),
-        messages=messages,
-        tools=TOOLS,
-        tool_choice="auto"
-    )
-    
-    response_message = response.choices[0].message
-    
-    # Check if there are tool calls
-    if response_message.tool_calls:
-        # Append the assistant message with tool calls
-        session.conversation_history.append(response_message.model_dump(exclude_none=True))
-        
-        # Sort tool calls so update_lead_state runs before book_site_visit
-        sorted_tool_calls = sorted(
-            response_message.tool_calls,
-            key=lambda tc: 0 if tc.function.name == "update_lead_state" else 1
-        )
-        
-        for tool_call in sorted_tool_calls:
-            function_name = tool_call.function.name
-            try:
-                kwargs = json.loads(tool_call.function.arguments)
-            except json.JSONDecodeError:
-                kwargs = {}
-                
-            tool_response = {}
-            
-            if function_name == "update_lead_state":
-                allowed_keys = {
-                    "name", "phone", "email", "configuration", "budget", "purpose", "current_location", 
-                    "purchase_timeline", "interest_level", "site_visit_requested", 
-                    "follow_up_required", "contact_permission", "language"
-                }
-                
-                is_valid = True
-                error_message = ""
-                error_code = ""
-                validated_data = {}
-                
-                for k, v in kwargs.items():
-                    if k not in allowed_keys:
-                        is_valid = False
-                        error_code = "unsupported_action"
-                        error_message = f"Unsupported field '{k}' provided."
-                        break
-                    
-                    if k == "configuration" and v:
-                        norm = str(v).lower().replace("-", " ").strip()
-                        if "2bhk" in norm.replace(" ", ""):
-                            validated_data[k] = "2 BHK"
-                        elif "3bhk" in norm.replace(" ", ""):
-                            validated_data[k] = "3 BHK"
-                        else:
-                            is_valid = False
-                            error_code = "invalid_configuration"
-                            error_message = "Configuration must be one of: 2 BHK, 3 BHK."
-                            break
-                    elif k == "interest_level" and v:
-                        if str(v).lower() not in ["low", "medium", "high"]:
-                            is_valid = False
-                            error_code = "invalid_tool_argument"
-                            error_message = "Interest level must be low, medium, or high."
-                            break
-                        validated_data[k] = str(v).lower()
-                    else:
-                        validated_data[k] = v
-                
-                if is_valid:
-                    for k, v in validated_data.items():
-                        if hasattr(session.lead_state, k) and v is not None:
-                            setattr(session.lead_state, k, v)
-                    tool_response = {"success": True, "message": "Lead state updated successfully."}
-                else:
-                    tool_response = {"success": False, "error": error_code, "message": error_message}
-                
-            elif function_name == "book_site_visit":
-                date = kwargs.get("date")
-                time = kwargs.get("time")
-                
-                missing_fields = []
-                if not session.lead_state.name:
-                    missing_fields.append("name")
-                if not session.lead_state.phone:
-                    missing_fields.append("phone")
-                if not session.lead_state.email:
-                    missing_fields.append("email")
-                
-                if not date or not time:
-                    tool_response = {
-                        "success": False, 
-                        "error": "missing_required_field", 
-                        "message": "Both date and time are required to book a site visit."
-                    }
-                elif missing_fields:
-                    missing_str = ", ".join(missing_fields)
-                    tool_response = {
-                        "success": False,
-                        "error": "missing_contact_details",
-                        "message": f"Cannot book site visit. Missing required contact details: {missing_str}. Ask the customer for these details before booking."
-                    }
-                else:
-                    result = book_site_visit(str(date), str(time))
-                    session.lead_state.site_visit_requested = True
-                    if result.get("success"):
-                        session.lead_state.site_visit_status = "booked"
-                        session.lead_state.site_visit_date = result.get("date")
-                        session.lead_state.site_visit_time = result.get("time")
-                        session.lead_state.booking_reference = result.get("booking_id")
-                        session.lead_state.conversation_outcome = "site_visit_booked"
-                    else:
-                        session.lead_state.site_visit_status = "failed"
-                    tool_response = result
-                
-            elif function_name == "request_human_callback":
-                result = request_human_callback()
-                session.lead_state.human_escalation = True
-                if result.get("success"):
-                    session.lead_state.conversation_outcome = "human_escalation_requested"
-                    session.conversation_ended = True # End conversation on successful handoff
-                tool_response = result
-                
-            elif function_name == "end_conversation":
-                session.conversation_ended = True
-                if "contact_permission" in kwargs:
-                    session.lead_state.contact_permission = kwargs.get("contact_permission")
-                if session.lead_state.contact_permission is False:
-                    session.lead_state.conversation_outcome = "opted_out"
-                tool_response = {"success": True, "message": "Conversation ended."}
-                
-            else:
-                tool_response = {"error": f"Unknown function: {function_name}"}
-                
-            # Append tool result
-            session.conversation_history.append({
-                "role": "tool",
-                "tool_call_id": tool_call.id,
-                "name": function_name,
-                "content": json.dumps(tool_response)
-            })
-            
-        # Get final response from LLM after tool executions
+    MAX_ITERATIONS = 3
+    for iteration in range(MAX_ITERATIONS):
         messages = [{"role": "system", "content": SYSTEM_PROMPT}] + session.conversation_history
-        final_response = await client.chat.completions.create(
+        
+        response = await client.chat.completions.create(
             model=get_llm_model(),
             messages=messages,
-            tools=TOOLS, # Keep tools in case it needs to do something else, though usually we don't force it
-            tool_choice="none" # Ensure it just answers text now
+            tools=TOOLS,
+            tool_choice="auto"
         )
-        final_text = clean_final_response(final_response.choices[0].message.content or "")
-        session.conversation_history.append({"role": "assistant", "content": final_text})
-        update_session(session_id, session)
-        return final_text
-    
-    else:
-        # No tool calls, just text
-        reply = clean_final_response(response_message.content or "")
-        session.conversation_history.append({"role": "assistant", "content": reply})
-        update_session(session_id, session)
-        return reply
+        
+        response_message = response.choices[0].message
+        
+        if response_message.tool_calls:
+            # Append the assistant message with tool calls
+            session.conversation_history.append(response_message.model_dump(exclude_none=True))
+            
+            # Sort tool calls so update_lead_state runs before book_site_visit
+            sorted_tool_calls = sorted(
+                response_message.tool_calls,
+                key=lambda tc: 0 if tc.function.name == "update_lead_state" else 1
+            )
+            
+            for tool_call in sorted_tool_calls:
+                function_name = tool_call.function.name
+                try:
+                    kwargs = json.loads(tool_call.function.arguments)
+                except json.JSONDecodeError:
+                    kwargs = {}
+                    
+                tool_response = {}
+                
+                if function_name == "update_lead_state":
+                    allowed_keys = {
+                        "name", "phone", "email", "configuration", "budget", "purpose", "current_location", 
+                        "purchase_timeline", "interest_level", "site_visit_requested", 
+                        "follow_up_required", "contact_permission", "language"
+                    }
+                    
+                    is_valid = True
+                    error_message = ""
+                    error_code = ""
+                    validated_data = {}
+                    
+                    for k, v in kwargs.items():
+                        if k not in allowed_keys:
+                            is_valid = False
+                            error_code = "unsupported_action"
+                            error_message = f"Unsupported field '{k}' provided."
+                            break
+                        
+                        if k == "configuration" and v:
+                            norm = str(v).lower().replace("-", " ").strip()
+                            if "2bhk" in norm.replace(" ", ""):
+                                validated_data[k] = "2 BHK"
+                            elif "3bhk" in norm.replace(" ", ""):
+                                validated_data[k] = "3 BHK"
+                            else:
+                                is_valid = False
+                                error_code = "invalid_configuration"
+                                error_message = "Configuration must be one of: 2 BHK, 3 BHK."
+                                break
+                        elif k == "interest_level" and v:
+                            if str(v).lower() not in ["low", "medium", "high"]:
+                                is_valid = False
+                                error_code = "invalid_tool_argument"
+                                error_message = "Interest level must be low, medium, or high."
+                                break
+                            validated_data[k] = str(v).lower()
+                        else:
+                            validated_data[k] = v
+                    
+                    if is_valid:
+                        for k, v in validated_data.items():
+                            if hasattr(session.lead_state, k) and v is not None:
+                                setattr(session.lead_state, k, v)
+                        tool_response = {"success": True, "message": "Lead state updated successfully."}
+                    else:
+                        tool_response = {"success": False, "error": error_code, "message": error_message}
+                    
+                elif function_name == "book_site_visit":
+                    date = kwargs.get("date")
+                    time = kwargs.get("time")
+                    
+                    missing_fields = []
+                    if not session.lead_state.name:
+                        missing_fields.append("name")
+                    if not session.lead_state.phone:
+                        missing_fields.append("phone")
+                    if not session.lead_state.email:
+                        missing_fields.append("email")
+                    
+                    if not date or not time:
+                        tool_response = {
+                            "success": False, 
+                            "error": "missing_required_field", 
+                            "message": "Both date and time are required to book a site visit."
+                        }
+                    elif missing_fields:
+                        missing_str = ", ".join(missing_fields)
+                        tool_response = {
+                            "success": False,
+                            "error": "missing_contact_details",
+                            "message": f"Cannot book site visit. Missing required contact details: {missing_str}. Ask the customer for these details before booking."
+                        }
+                    else:
+                        result = book_site_visit(str(date), str(time))
+                        session.lead_state.site_visit_requested = True
+                        if result.get("success"):
+                            session.lead_state.site_visit_status = "booked"
+                            session.lead_state.site_visit_date = result.get("date")
+                            session.lead_state.site_visit_time = result.get("time")
+                            session.lead_state.booking_reference = result.get("booking_id")
+                            session.lead_state.conversation_outcome = "site_visit_booked"
+                        else:
+                            session.lead_state.site_visit_status = "failed"
+                        tool_response = result
+                    
+                elif function_name == "request_human_callback":
+                    result = request_human_callback()
+                    session.lead_state.human_escalation = True
+                    if result.get("success"):
+                        session.lead_state.conversation_outcome = "human_escalation_requested"
+                        session.conversation_ended = True
+                    tool_response = result
+                    
+                elif function_name == "end_conversation":
+                    session.conversation_ended = True
+                    if "contact_permission" in kwargs:
+                        session.lead_state.contact_permission = kwargs.get("contact_permission")
+                    if session.lead_state.contact_permission is False:
+                        session.lead_state.conversation_outcome = "opted_out"
+                    tool_response = {"success": True, "message": "Conversation ended."}
+                    
+                else:
+                    tool_response = {"error": f"Unknown function: {function_name}"}
+                    
+                # Append tool result
+                session.conversation_history.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "name": function_name,
+                    "content": json.dumps(tool_response)
+                })
+            # Continue the loop for the next LLM call
+            continue
+        
+        else:
+            # No tool calls, just text
+            reply = clean_final_response(response_message.content or "")
+            session.conversation_history.append({"role": "assistant", "content": reply})
+            update_session(session_id, session)
+            return reply
+
+    # Fallback if MAX_ITERATIONS is exceeded
+    reply = "I need a moment to process this. Could you please provide your contact details if you haven't already?"
+    session.conversation_history.append({"role": "assistant", "content": reply})
+    update_session(session_id, session)
+    return reply
