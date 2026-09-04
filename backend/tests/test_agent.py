@@ -105,6 +105,10 @@ async def test_booking_valid_slot():
     with patch("app.agent.client.chat.completions.create", new_callable=AsyncMock) as mock_create:
         tc = MockToolCall("call_1", MockToolFunction("book_site_visit", json.dumps({"date": "Saturday", "time": "11:00 AM"})))
         mock_create.side_effect = build_mock_responses([tc])
+        session = get_session("test_agent_session")
+        session.lead_state.name = "Test"
+        session.lead_state.phone = "123"
+        session.lead_state.email = "test@test.com"
         await process_chat("test_agent_session", "Book for Saturday 11am")
         session = get_session("test_agent_session")
         assert session.lead_state.site_visit_status == "booked"
@@ -117,6 +121,10 @@ async def test_booking_invalid_slot():
     with patch("app.agent.client.chat.completions.create", new_callable=AsyncMock) as mock_create:
         tc = MockToolCall("call_1", MockToolFunction("book_site_visit", json.dumps({"date": "Monday", "time": "11:00 AM"})))
         mock_create.side_effect = build_mock_responses([tc])
+        session = get_session("test_agent_session")
+        session.lead_state.name = "Test"
+        session.lead_state.phone = "123"
+        session.lead_state.email = "test@test.com"
         await process_chat("test_agent_session", "Book for Monday 11am")
         session = get_session("test_agent_session")
         assert session.lead_state.site_visit_status == "failed"
@@ -169,6 +177,11 @@ async def test_scenario_d_unavailable_slot():
         msg2 = MockMessage(content="That slot is unavailable. We have Saturday 11:00 AM instead.")
         mock_create.side_effect = [MockResponse([MockChoice(msg1)]), MockResponse([MockChoice(msg2)])]
         
+        session = get_session("test_agent_session")
+        session.lead_state.name = "Test"
+        session.lead_state.phone = "123"
+        session.lead_state.email = "test@test.com"
+
         reply = await process_chat("test_agent_session", "Tuesday 2 PM please")
         assert "unavailable" in reply
         

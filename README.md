@@ -1,113 +1,134 @@
-# Northstar Homes AI Sales Agent — Backend
+# Northstar Homes AI Sales Agent
 
-This is the backend implementation for the Northstar Homes AI Sales Agent assignment.
+A conversational AI sales agent built for the Northstar Homes assignment.
 
-## Project Overview
+The agent helps customers understand **Northstar One**, qualify their requirements, and arrange a simulated site visit. It supports **English, Hindi, and Hinglish** and is designed for both chat and voice-style conversations.
 
-This API powers a conversational AI sales agent designed for Northstar Homes. It acts as a friendly and capable sales representative for the "Northstar One" project in Gurugram. 
+## How to Run
 
-### Design Philosophy
+### Prerequisites
 
-The core architectural principle of this system is:
-> **The LLM can request an action, but the backend decides whether that action is valid and what actually happened.**
+- Python 3.10+
+- Node.js 18+
+- API key for either OpenAI or OpenRouter
 
-The LLM is not treated as an authoritative business-logic layer.
+### 1. Start the Backend
 
-LLM:
-- understands intent
-- extracts customer information
-- requests supported actions
-- generates conversational responses
+```bash
+cd backend
+
+python -m venv .venv
+source .venv/bin/activate
+# Windows: .venv\Scripts\activate
+
+pip install -r requirements.txt
+
+cp .env.example .env
+```
+
+Add your API key to `.env`:
+
+```env
+OPENAI_API_KEY=your_key_here
+OPENAI_MODEL=your_model_here
+
+# Or use OpenRouter
+OPENROUTER_API_KEY=your_key_here
+OPENROUTER_MODEL=your_model_here
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+```
+
+If `OPENAI_API_KEY` is configured, the agent uses OpenAI. Otherwise, it uses OpenRouter.
+
+Start FastAPI:
+
+```bash
+uvicorn app.main:app --reload
+```
 
 Backend:
-- validates tool arguments
-- enforces business rules
-- owns session state
-- owns booking results
-- generates booking/escalation references
-- prevents invalid LLM output from corrupting state
 
-This means that the agent parses context naturally but calls defined backend "tools" to confirm bookings, escalate to human reps, or log important lead states. The LLM never hallucinates booking IDs or invents state that hasn't been confirmed by the backend.
+```text
+http://localhost:8000
+```
+
+### 2. Start the Frontend
+
+In another terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:5173
+```
+
+---
+
+## Key Assumptions
+
+This assignment uses a simulated environment rather than real CRM or calendar integrations.
+
+* The agent only has confirmed information provided in the assignment:
+
+  * **Northstar Homes**
+  * **Northstar One**
+  * **Sector 79, Gurugram**
+  * **2 BHK — ₹1.35 crore onwards**
+  * **3 BHK — ₹1.75 crore onwards**
+* The agent does not invent amenities, discounts, availability, floor plans, possession dates, financing details, or other unsupported information.
+* Site-visit booking is simulated by the backend.
+* Human escalation is simulated.
+* Conversation sessions are stored in memory. In production, this layer could be replaced with Redis or PostgreSQL.
+* Lead information is maintained as conversation state.
+* LLM tool calls request backend actions, but the backend validates those actions before executing them.
+
+## Known Limitations
+
+* **No persistent database is used for this assignment.** The focus is on demonstrating the AI agent, conversation memory, qualification, and backend actions rather than introducing database infrastructure that is not required by the assignment. An in-memory session store keeps the prototype simple and easy to run locally, while the session layer can be replaced with Redis or PostgreSQL in production. Active conversations are therefore cleared when the backend restarts.
+* Site-visit availability is simulated and is not connected to a real calendar.
+* Human escalation does not connect to an actual sales representative or CRM.
+* No real email, SMS, WhatsApp, or calling integration.
+* The agent's knowledge is limited to the project information supplied in the assignment.
+* Voice-compatible conversation behavior is implemented, but real telephony/STT/TTS integration is outside the assignment scope.
+
+## AI Tools Used
+
+AI-assisted development was used during implementation and testing.
+
+* **Claude Code / Claude** — code generation, debugging, refactoring, test cases, and prompt iteration.
+* **OpenAI / OpenRouter models** — runtime LLM for the sales agent.
+
+AI-generated code and suggestions were manually reviewed, tested, and modified as required.
 
 ## Architecture
 
-- **Framework**: FastAPI (Python)
-- **Memory/State**: Simple in-memory session manager.
-- **LLM Integration**: OpenRouter via OpenAI Python SDK (utilizing standard tool-calling).
-- **Testing**: `pytest` and `fastapi.testclient`, mocking external LLM calls to keep tests reliable.
-
-### Request Flow
-```
-Customer -> POST /chat 
-   -> Validation (Max length check)
-   -> Session loaded
-   -> OpenRouter LLM Call (with Tools: update_lead_state, book_site_visit, etc.)
-   -> Backend executes required tools deterministically
-   -> Agent responds naturally
-   -> Session updated
-```
-
-## Setup & Running
-
-1. **Install dependencies**:
-   ```bash
-   cd backend
-   python3 -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   ```
-
-2. **Environment Variables**:
-   Copy `.env.example` to `.env` and fill in:
-   ```env
-   OPENROUTER_API_KEY=your_key
-   LLM_MODEL=openrouter/free
-   OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-   MAX_MESSAGE_LENGTH=4000
-   ```
-   *(To use OpenAI directly, update the BASE_URL to OpenAI's and supply OPENAI_API_KEY)*
-
-3. **Run the server**:
-   ```bash
-   uvicorn app.main:app --reload
-   ```
-
-## API Examples
-
-**Health Check**
-```bash
-curl -X GET http://localhost:8000/health
+```text
+Customer
+   │
+   ▼
+React + Vite Chat UI
+   │
+   ▼
+FastAPI Backend
+   │
+   ├── Session / Lead Memory
+   ├── System Prompt
+   ├── LLM Provider
+   │     ├── OpenAI
+   │     └── OpenRouter
+   │
+   └── Backend Actions
+         ├── Lead State Updates
+         ├── Site Visit Booking
+         └── Human Escalation
 ```
 
-**Chat**
-```bash
-curl -X POST http://localhost:8000/chat \
--H "Content-Type: application/json" \
--d '{"session_id": "user123", "message": "Hi, I am looking for a 3 BHK in Gurugram."}'
-```
+---
 
-**Analytics**
-```bash
-curl -X GET http://localhost:8000/analytics/user123
-```
-
-**Reset Session**
-```bash
-curl -X POST http://localhost:8000/reset \
--H "Content-Type: application/json" \
--d '{"session_id": "user123"}'
-```
-
-## Security Approach
-- **Prompt Isolation**: System instructions heavily restrict agent scope to real-estate only.
-- **Input Validation**: Hard bounds on payload size limit injection complexity.
-- **No Direct Executions**: LLM can only pick from a curated list of strict tool calls which map to safe Python functions.
-- **Data Protection**: Secrets are loaded through Pydantic settings from the environment, never committed.
-
-## Known Limitations & Assumptions
-- **In-Memory Store**: `Dict`-based session storage resets on server restart. For production, Redis or Postgres is required.
-- **Booking Simulator**: Only 4 specific slots are accepted as "valid" slots. 
-- **Tool-calling limits**: Using models with poor tool calling might cause unstable behavior. A robust model (e.g. Gemini 3.1 Pro or GPT-4o) is highly recommended.
-
-## AI Tools Used
-- Written and refined alongside an AI Assistant for boilerplate scaffolding, architecture sanity checks, and test-suite generation.
+For the detailed architecture, conversation flows, prompt design, validation, and testing approach, please refer to the accompanying demo video.

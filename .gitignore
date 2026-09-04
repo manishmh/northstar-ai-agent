@@ -69,3 +69,29 @@ cover/
 # Temporary Test Scripts
 test_script.sh
 run_tests.py
+
+# Frontend / Node.js
+node_modules/
+dist/
+dist-ssr/
+build/
+*.local
+.env.*.local
+.eslintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+logs/
+*.log
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+Desktop.ini
+.DS_Store
+.AppleDouble
+.LSOverride

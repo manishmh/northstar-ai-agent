@@ -19,6 +19,8 @@ class ResetResponse(BaseModel):
 
 class LeadState(BaseModel):
     name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
     configuration: Optional[str] = None
     budget: Optional[str] = None
     purpose: Optional[str] = None

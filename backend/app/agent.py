@@ -6,11 +6,9 @@ from .session import get_session, update_session
 from .booking import book_site_visit
 from .escalation import request_human_callback
 from .models import SessionData
+from .llm import get_llm_client, get_llm_model
 
-client = AsyncOpenAI(
-    base_url=settings.openrouter_base_url or "https://openrouter.ai/api/v1",
-    api_key=settings.openrouter_api_key or "dummy-key" # fallback for tests
-)
+client = get_llm_client()
 
 PROMPT_PATH = os.path.join(os.path.dirname(__file__), "prompts", "northstar_sales_agent.txt")
 
@@ -22,11 +20,13 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "update_lead_state",
-            "description": "Update the lead's state with newly discovered information. Only include fields that have been explicitly provided or clearly inferred.",
+            "description": "Whenever the customer explicitly provides one or more supported lead attributes, update all clearly stated attributes in the same turn before responding. Do not discard a lead attribute merely because another action, such as booking, is also requested in the same message. Only include fields that have been explicitly provided or clearly inferred.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "name": {"type": "string"},
+                    "phone": {"type": "string"},
+                    "email": {"type": "string"},
                     "configuration": {"type": "string", "enum": ["2 BHK", "3 BHK"]},
                     "budget": {"type": "string"},
                     "purpose": {"type": "string"},
@@ -132,7 +132,7 @@ async def process_chat(session_id: str, user_message: str) -> str:
     
     # Call LLM
     response = await client.chat.completions.create(
-        model=settings.llm_model,
+        model=get_llm_model(),
         messages=messages,
         tools=TOOLS,
         tool_choice="auto"
@@ -145,7 +145,13 @@ async def process_chat(session_id: str, user_message: str) -> str:
         # Append the assistant message with tool calls
         session.conversation_history.append(response_message.model_dump(exclude_none=True))
         
-        for tool_call in response_message.tool_calls:
+        # Sort tool calls so update_lead_state runs before book_site_visit
+        sorted_tool_calls = sorted(
+            response_message.tool_calls,
+            key=lambda tc: 0 if tc.function.name == "update_lead_state" else 1
+        )
+        
+        for tool_call in sorted_tool_calls:
             function_name = tool_call.function.name
             try:
                 kwargs = json.loads(tool_call.function.arguments)
@@ -156,7 +162,7 @@ async def process_chat(session_id: str, user_message: str) -> str:
             
             if function_name == "update_lead_state":
                 allowed_keys = {
-                    "name", "configuration", "budget", "purpose", "current_location", 
+                    "name", "phone", "email", "configuration", "budget", "purpose", "current_location", 
                     "purchase_timeline", "interest_level", "site_visit_requested", 
                     "follow_up_required", "contact_permission", "language"
                 }
@@ -205,11 +211,27 @@ async def process_chat(session_id: str, user_message: str) -> str:
             elif function_name == "book_site_visit":
                 date = kwargs.get("date")
                 time = kwargs.get("time")
+                
+                missing_fields = []
+                if not session.lead_state.name:
+                    missing_fields.append("name")
+                if not session.lead_state.phone:
+                    missing_fields.append("phone")
+                if not session.lead_state.email:
+                    missing_fields.append("email")
+                
                 if not date or not time:
                     tool_response = {
                         "success": False, 
                         "error": "missing_required_field", 
                         "message": "Both date and time are required to book a site visit."
+                    }
+                elif missing_fields:
+                    missing_str = ", ".join(missing_fields)
+                    tool_response = {
+                        "success": False,
+                        "error": "missing_contact_details",
+                        "message": f"Cannot book site visit. Missing required contact details: {missing_str}. Ask the customer for these details before booking."
                     }
                 else:
                     result = book_site_visit(str(date), str(time))
@@ -254,7 +276,7 @@ async def process_chat(session_id: str, user_message: str) -> str:
         # Get final response from LLM after tool executions
         messages = [{"role": "system", "content": SYSTEM_PROMPT}] + session.conversation_history
         final_response = await client.chat.completions.create(
-            model=settings.llm_model,
+            model=get_llm_model(),
             messages=messages,
             tools=TOOLS, # Keep tools in case it needs to do something else, though usually we don't force it
             tool_choice="none" # Ensure it just answers text now
