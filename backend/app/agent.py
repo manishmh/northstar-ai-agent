@@ -117,8 +117,8 @@ async def process_chat(session_id: str, user_message: str) -> str:
     session.message_count += 1
     
     # Check for opt-out in the incoming message
-    lower_msg = user_message.lower().strip()
-    if lower_msg in ["please don't contact me again", "don't contact me", "stop messaging me", "don't contact me again."]:
+    lower_msg = user_message.lower().strip().rstrip(".,?!")
+    if lower_msg in ["please don't contact me again", "don't contact me", "stop messaging me", "don't contact me again"]:
         session.conversation_ended = True
         session.lead_state.contact_permission = False
         session.lead_state.conversation_outcome = "opted_out"
