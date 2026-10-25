@@ -1,142 +1,217 @@
-# Northstar Homes AI Sales Agent
+# WindSight — Video Recording Script
+**Total target: 9 minutes 15 seconds | Maximum: 10 minutes**
 
-A conversational AI sales agent built for the Northstar Homes assignment.
-
-The agent helps customers understand **Northstar One**, qualify their requirements, and arrange a simulated site visit. It supports **English, Hindi, and Hinglish** and is designed for both chat and voice-style conversations.
-
-## System Prompt
-
-The complete system prompt used by the sales agent is available here:
-
-**[View the Northstar Sales Agent System Prompt](backend/app/prompts/northstar_sales_agent.txt)**
-
-The prompt defines the agent's conversation behavior, qualification flow, language handling, objection handling, booking flow, escalation rules, and boundaries around unsupported information.
-
-## How to Run
-
-### Prerequisites
-
-- Python 3.10+
-- Node.js 18+
-- API key for either OpenAI or OpenRouter
-
-### 1. Start the Backend
-
-```bash
-cd backend
-
-python -m venv .venv
-source .venv/bin/activate
-# Windows: .venv\Scripts\activate
-
-pip install -r requirements.txt
-
-cp .env.example .env
-```
-
-Add your API key to `.env`:
-
-```env
-OPENAI_API_KEY=your_key_here
-OPENAI_MODEL=your_model_here
-
-# Or use OpenRouter
-OPENROUTER_API_KEY=your_key_here
-OPENROUTER_MODEL=your_model_here
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-```
-
-If `OPENAI_API_KEY` is configured, the agent uses OpenAI. Otherwise, it uses OpenRouter.
-
-Start FastAPI:
-
-```bash
-uvicorn app.main:app --reload
-```
-
-Backend:
-
-```text
-http://localhost:8000
-```
-
-### 2. Start the Frontend
-
-In another terminal:
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Open:
-
-```text
-http://localhost:5173
-```
+**Recording rule:** Read the bold text naturally, do not rush. Follow each numbered instruction before speaking. When showing code, open the specified file and line range first, then explain only the relevant part.
 
 ---
 
-## Key Assumptions
+# PART 1 — Customer Presentation
+**Target: 4 minutes 30 seconds | Maximum: 5 minutes**
 
-This assignment uses a simulated environment rather than real CRM or calendar integrations.
+## 1A. Opening — The main question
+**Time: 0:00–0:40**
 
-* The agent only has confirmed information provided in the assignment:
+**ON SCREEN**
+1. Open `http://localhost:8080`.
+2. Select the **Overview** tab.
+3. Set the delivery date to **15 January 2026**.
+4. Set the cutoff to **12:00**.
+5. Wait for the chart and metric cards to load.
 
-  * **Northstar Homes**
-  * **Northstar One**
-  * **Sector 79, Gurugram**
-  * **2 BHK — ₹1.35 crore onwards**
-  * **3 BHK — ₹1.75 crore onwards**
-* The agent does not invent amenities, discounts, availability, floor plans, possession dates, financing details, or other unsupported information.
-* Site-visit booking is simulated by the backend.
-* Human escalation is simulated.
-* Conversation sessions are stored in memory. In production, this layer could be replaced with Redis or PostgreSQL.
-* Lead information is maintained as conversation state.
-* LLM tool calls request backend actions, but the backend validates those actions before executing them.
+**SAY**
 
-## Known Limitations
+**"We built WindSight to answer one important question, what did the wind forecast show when your team had to make its buying decision, and how accurate was that forecast?**
 
-* **No persistent database is used for this assignment.** The focus is on demonstrating the AI agent, conversation memory, qualification, and backend actions rather than introducing database infrastructure that is not required by the assignment. An in-memory session store keeps the prototype simple and easy to run locally, while the session layer can be replaced with Redis or PostgreSQL in production. Active conversations are therefore cleared when the backend restarts.
-* Site-visit availability is simulated and is not connected to a real calendar.
-* Human escalation does not connect to an actual sales representative or CRM.
-* No real email, SMS, WhatsApp, or calling integration.
-* The agent's knowledge is limited to the project information supplied in the assignment.
-* Voice-compatible conversation behavior is implemented, but real telephony/STT/TTS integration is outside the assignment scope.
+**The application uses Elexon data for January 2026, and helps you understand what was known at decision time, how the forecast changed, and how much it differed from actual wind generation."**
 
-## AI Tools Used
+## 1B. What the team knew before buying
+**Time: 0:40–1:50 | Requirement 1: Forecast available at decision time**
 
-AI-assisted development was used during implementation and testing.
+**ON SCREEN**
+1. Point to the delivery date and cutoff controls.
+2. Point to the metric cards.
+3. Move to the forecast-versus-actual chart.
+4. Hover over a few points to show the values.
 
-* **Claude Code / Claude** — code generation, debugging, refactoring, test cases, and prompt iteration.
-* **OpenAI / OpenRouter models** — runtime LLM for the sales agent.
+**SAY**
 
-AI-generated code and suggestions were manually reviewed, tested, and modified as required.
+**"You can select any delivery date, and choose the time when the purchasing decision needs to be made. By default, we use noon on the previous day, London time. This is a stated assumption for the pilot, and you can change it to test other timings.**
 
-## Architecture
+**For 15 January, the average forecast was around 11.8 gigawatts, equivalent to about 282 gigawatt-hours across the day.**
 
-```text
-Customer
-   │
-   ▼
-React + Vite Chat UI
-   │
-   ▼
-FastAPI Backend
-   │
-   ├── Session / Lead Memory
-   ├── System Prompt
-   ├── LLM Provider
-   │     ├── OpenAI
-   │     └── OpenRouter
-   │
-   └── Backend Actions
-         ├── Lead State Updates
-         ├── Site Visit Booking
-         └── Human Escalation
-```
+**The completeness indicator tells you whether the data is complete, partial, or unavailable. This is important because we should never present an incomplete forecast as if we have the full picture.**
+
+**In this chart, blue shows the forecast available at the selected cutoff, and green shows actual generation. You can see where the forecast was higher than the wind power that was actually generated."**
+
+## 1C. How the forecast changed over time
+**Time: 1:50–2:50 | Requirement 2: Forecast evolution**
+
+**ON SCREEN**
+1. Click the **Forecast Timeline** tab.
+2. Keep the preselected period, **25**.
+3. Point to the timeline, then the amber cutoff marker.
+4. Point to the cutoff, latest forecast, and actual comparison cards.
+
+**SAY**
+
+**"This page shows how the forecast changed over time, before and after the purchasing cutoff.**
+
+**For this interval, we have 24 forecast publications. Each point represents a forecast publication, so we can see how the prediction changed as new information became available.**
+
+**The amber marker identifies the forecast selected at our decision cutoff, which is 11,351 megawatts. Forecasts published after this point were not available for that decision, so we keep them separate.**
+
+**The latest forecast was 10,229 megawatts, while actual generation was 9,742 megawatts. The forecast moved closer to the actual value, but it still overestimated generation."**
+
+## 1D. Measuring forecast accuracy
+**Time: 2:50–3:50 | Requirements 3 and 4: Accuracy, error magnitude, and direction**
+
+**ON SCREEN**
+1. Click the **Accuracy Analysis** tab.
+2. Select the full January date range.
+3. Point to the completeness indicator and metric cards.
+4. Show the error histogram and percentile cards.
+5. Scroll to the largest-errors table.
+
+**SAY**
+
+**"Now let's look at the accuracy across the entire month. We matched all 1,488 half-hourly intervals, so the evaluation covers the full month.**
+
+**The mean absolute error, or MAE, is around 2 gigawatts. This tells us the average size of the forecast error, without considering whether the forecast was too high or too low.**
+
+**The bias is around plus 1.8 gigawatts. A positive bias means the forecasts were generally higher than actual generation, so the wind output was often overestimated.**
+
+**The histogram shows how frequently different error sizes occurred. The percentile figures help us understand larger errors, which is useful when planning for uncertainty.**
+
+**Finally, this table highlights the intervals with the largest errors, so the team can investigate where the forecast was least reliable."**
+
+## 1E. What this means for procurement
+**Time: 3:50–4:30**
+
+**ON SCREEN**
+1. Return to the **Overview** tab.
+2. Scroll to the **Procurement Implications** panel.
+3. Point to the explanation of overforecasting and underforecasting.
+
+**SAY**
+
+**"For procurement, the direction of the error matters. If we expect more wind power than we actually receive, we may need to buy more electricity from other sources than planned. If we underestimate wind generation, we may plan to buy more electricity than necessary.**
+
+**WindSight makes these risks easier to understand, using the available forecast and actual generation data. We do not calculate a final purchasing requirement, because that would also need electricity demand and other supply information.**
+
+**That is the goal of this pilot, to make forecast information clearer, measure its accuracy, and help the team understand the risks before making purchasing decisions."**
 
 ---
 
-For the detailed architecture, conversation flows, prompt design, validation, and testing approach, please refer to the accompanying demo video.
+# PART 2 — Technical Review
+**Target: 4 minutes 45 seconds | Maximum: 5 minutes**
+
+## 2A. Architecture
+**Time: 0:00–0:40**
+
+**ON SCREEN**
+1. Open the repository root in your editor.
+2. Show the README architecture diagram.
+3. Briefly point to the `frontend`, `backend`, and Docker configuration.
+
+**SAY**
+
+**"The application has two main parts. The frontend uses React, TypeScript, Vite, Tailwind CSS, and Recharts. The backend uses Python and FastAPI.**
+
+**The backend handles the Elexon API requests, validates the data, and performs the forecast selection and accuracy calculations. The frontend displays the results.**
+
+**We use Docker Compose to run both services together. Nginx serves the built frontend and routes API requests to the backend. The application does not need a database or user authentication for this pilot.**
+
+**The deployment configuration also supports a separate frontend and hosted backend, using an API URL environment variable."**
+
+## 2B. How we access Elexon data
+**Time: 0:40–1:40**
+
+**CODE TO OPEN BEFORE SPEAKING**
+- `backend/app/elexon.py`, lines **1–39** — API behaviour and findings.
+- Then `backend/app/main.py`, lines **88–98** — `windfor_window`.
+- If time permits, `backend/app/elexon.py`, lines **54–94** — retries and errors.
+
+**SAY**
+
+**"One important part of the work was checking how the Elexon API behaves in practice, rather than relying only on the documentation.**
+
+**The actual generation endpoint returns wind generation at half-hourly intervals. We filter the results to include only wind generation, and request data using the supported date parameters.**
+
+**The forecast endpoint behaves differently. Its data is hourly, and each forecast has a publication time. We retrieve the relevant publication window, then select the forecast records we need in our backend.**
+
+**This matters because the actuals and forecasts do not have the same time resolution. We handle that difference explicitly instead of treating the data as identical.**
+
+**We also handle API errors. Permanent errors, such as invalid requests, are not retried. Temporary errors, such as rate limits or server failures, can be retried with a delay."**
+
+## 2C. The most important logic — selecting the right forecast
+**Time: 1:40–3:00**
+
+**CODE TO OPEN BEFORE SPEAKING**
+- `backend/app/logic.py`, lines **129–149** — `select_cutoff_forecast`.
+- Then lines **57–66** — `parse_cutoff`.
+- If needed, lines **86–127** — duplicate handling and record validation.
+- Then lines **151–166** — latest-forecast selection.
+
+**SAY**
+
+**"This is the most important part of the assignment, because the forecast must be the one that was actually available when the buying decision was made.**
+
+**For each half-hourly delivery interval, we find the matching hourly forecast, using the documented mapping that rounds the interval down to the hour. We then select the latest forecast published at or before the cutoff.**
+
+**This check prevents us from using information that arrived too late. A forecast published after the decision time must not be included, even if it is more accurate.**
+
+**We also handle the cutoff in London time, and convert it correctly using Python's timezone support. This avoids timezone mistakes when daylight saving time changes.**
+
+**Duplicate records are handled consistently, and we keep missing values as missing instead of replacing them with zero. The latest available forecast is calculated separately from the cutoff forecast, so the two views cannot be confused."**
+
+## 2D. Accuracy metrics and missing data
+**Time: 3:00–4:00**
+
+**CODE TO OPEN BEFORE SPEAKING**
+- `backend/app/logic.py`, lines **230–259** — `compute_metrics`.
+- Then lines **261–283** — percentile and uncertainty calculations.
+- Open `frontend/src/views/Accuracy.tsx`, line **191** — `connectNulls={false}`.
+
+**SAY**
+
+**"Next, we calculate the forecast error and the accuracy metrics. Throughout the application, the signed error is forecast minus actual generation. A positive value means we overforecast, and a negative value means we underforecast.**
+
+**MAE measures the average absolute error, while RMSE gives more weight to larger errors. We also calculate percentage-based metrics where they are meaningful. For MAPE, we exclude very small actual generation values to avoid misleading percentages.**
+
+**If a metric cannot be calculated reliably, we return an unavailable value rather than showing zero. We also require enough observations before presenting the uncertainty percentiles.**
+
+**On the frontend, missing daily results appear as gaps in the chart, not as zero values. This prevents the chart from suggesting that generation or error was zero when we actually had no valid data."**
+
+## 2E. Tests, reliability, and next steps
+**Time: 4:00–4:45**
+
+**ON SCREEN**
+1. Open `backend/tests/fixtures.py`.
+2. Show the backend test files and test results.
+3. Briefly show `backend/app/cache.py`, lines **22–33**.
+4. Finish at the README, with the setup and deployment instructions visible.
+
+**SAY**
+
+**"We have 21 backend tests covering forecast cutoff selection, post-cutoff exclusion, duplicate records, timezone handling, metric calculations, and invalid API responses. The test fixtures are synthetic and clearly separated from live Elexon data.**
+
+**The API validates user inputs and returns useful error messages. When the upstream service fails, the backend returns an appropriate error response instead of exposing a traceback.**
+
+**We also cache API responses on disk for 24 hours, using the dataset and query parameters as the cache key. This reduces repeated requests and makes the application faster after the first load.**
+
+**The next improvements would be more cutoff presets, a fully offline test mode, and completing the hosted deployment. The main goal was to build a clear, testable first version that handles forecast timing correctly and makes the results easy to review."**
+
+---
+
+# Final recording checklist
+
+- [ ] Run `docker compose up --build`.
+- [ ] Open `http://localhost:8080` and verify the charts and tabs work.
+- [ ] Run `curl -s http://localhost:8000/api/health`.
+- [ ] Check that all displayed metrics match the current application.
+- [ ] Verify the specified file paths and line numbers in your current code.
+- [ ] Do not describe the January dataset as real-time data. Say **real Elexon data for January 2026**.
+- [ ] Confirm the public GitHub repository and deployed URL work in an incognito window.
+- [ ] Record Part 1 and Part 2, keeping each under five minutes.
+- [ ] Upload the video to YouTube as **Unlisted**, and verify the link in an incognito window.
+- [ ] Include the video, repository, and deployed application links in the submission form.
