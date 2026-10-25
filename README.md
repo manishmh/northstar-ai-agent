@@ -103,33 +103,32 @@
 ---
 
 # PART 2 — Technical Review
-**Target: 4 minutes 45 seconds | Maximum: 5 minutes**
+**Target: 4 minutes 45 seconds | Hard limit: 5 minutes**
 
 ## 2A. Architecture
 **Time: 0:00–0:40**
 
 **ON SCREEN**
-1. Open the repository root in your editor.
+1. Open the repository root in your code editor.
 2. Show the README architecture diagram.
-3. Briefly point to the `frontend`, `backend`, and Docker configuration.
+3. Point to the `frontend`, `backend`, and Docker configuration.
 
 **SAY**
 
 **"The application has two main parts. The frontend uses React, TypeScript, Vite, Tailwind CSS, and Recharts. The backend uses Python and FastAPI.**
 
-**The backend handles the Elexon API requests, validates the data, and performs the forecast selection and accuracy calculations. The frontend displays the results.**
+**The backend handles Elexon API requests, validates the data, and calculates forecast accuracy. The frontend displays the results in charts and metric cards.**
 
-**We use Docker Compose to run both services together. Nginx serves the built frontend and routes API requests to the backend. The application does not need a database or user authentication for this pilot.**
+**We use Docker Compose to run both services together. Nginx serves the built frontend and routes API requests to the backend. For this pilot, we don't need a database or user authentication.**
 
-**The deployment configuration also supports a separate frontend and hosted backend, using an API URL environment variable."**
+**The frontend can also be configured to connect to a separately hosted backend using an API URL environment variable."**
+
+---
 
 ## 2B. How we access Elexon data
 **Time: 0:40–1:40**
 
-**CODE TO OPEN BEFORE SPEAKING**
-- `backend/app/elexon.py`, lines **1–39** — API behaviour and findings.
-- Then `backend/app/main.py`, lines **88–98** — `windfor_window`.
-- If time permits, `backend/app/elexon.py`, lines **54–94** — retries and errors.
+**FILE: `backend/app/elexon.py`, lines 1–39 — API behaviour and findings**
 
 **SAY**
 
@@ -139,79 +138,123 @@
 
 **The forecast endpoint behaves differently. Its data is hourly, and each forecast has a publication time. We retrieve the relevant publication window, then select the forecast records we need in our backend.**
 
-**This matters because the actuals and forecasts do not have the same time resolution. We handle that difference explicitly instead of treating the data as identical.**
+**This matters because the actuals and forecasts do not have the same time resolution. We handle that difference explicitly instead of treating the data as identical."**
 
-**We also handle API errors. Permanent errors, such as invalid requests, are not retried. Temporary errors, such as rate limits or server failures, can be retried with a delay."**
-
-## 2C. The most important logic — selecting the right forecast
-**Time: 1:40–3:00**
-
-**CODE TO OPEN BEFORE SPEAKING**
-- `backend/app/logic.py`, lines **129–149** — `select_cutoff_forecast`.
-- Then lines **57–66** — `parse_cutoff`.
-- If needed, lines **86–127** — duplicate handling and record validation.
-- Then lines **151–166** — latest-forecast selection.
+**FILE: `backend/app/main.py`, lines 88–98 — `windfor_window`**
 
 **SAY**
 
-**"This is the most important part of the assignment, because the forecast must be the one that was actually available when the buying decision was made.**
+**"Here, we define the time window used to retrieve forecast publications. We fetch a wider window than the delivery date itself, so we can find forecasts published before the purchasing cutoff, including forecasts created earlier."**
 
-**For each half-hourly delivery interval, we find the matching hourly forecast, using the documented mapping that rounds the interval down to the hour. We then select the latest forecast published at or before the cutoff.**
+**FILE: `backend/app/elexon.py`, lines 54–94 — retries and error handling**
 
-**This check prevents us from using information that arrived too late. A forecast published after the decision time must not be included, even if it is more accurate.**
+**SAY**
 
-**We also handle the cutoff in London time, and convert it correctly using Python's timezone support. This avoids timezone mistakes when daylight saving time changes.**
+**"We also handle API errors. Permanent errors, such as invalid requests, are not retried. Temporary errors, such as rate limits or server failures, can be retried with a delay. This makes the data-loading process more reliable."**
 
-**Duplicate records are handled consistently, and we keep missing values as missing instead of replacing them with zero. The latest available forecast is calculated separately from the cutoff forecast, so the two views cannot be confused."**
+---
+
+## 2C. Selecting the correct forecast
+**Time: 1:40–3:00**
+
+**FILE: `backend/app/logic.py`, lines 129–149 — `select_cutoff_forecast`**
+
+**SAY**
+
+**"This is the most important part of the assignment, because we need to show the forecast that was actually available when the purchasing decision was made.**
+
+**For each half-hourly delivery interval, we find the matching hourly forecast, using the documented mapping that rounds the interval down to the hour. We then select the latest forecast published at or before the cutoff time.**
+
+**This check prevents us from using information that arrived too late. A forecast published after the decision time must not be included, even if it is more accurate."**
+
+**FILE: `backend/app/logic.py`, lines 57–66 — `parse_cutoff`**
+
+**SAY**
+
+**"We handle the cutoff using London local time, and convert it correctly with Python's timezone support. This is important because the UK changes between standard time and daylight saving time during the year."**
+
+**FILE: `backend/app/logic.py`, lines 86–105 — duplicate handling**
+
+**SAY**
+
+**"We handle duplicate records consistently, so the same forecast is not counted more than once. When duplicate records compete, we use a deterministic rule to select the record."**
+
+**FILE: `backend/app/logic.py`, lines 107–127 — record validation and missing values**
+
+**SAY**
+
+**"We also remove invalid records and keep missing values as missing, instead of replacing them with zero. This prevents missing data from being mistaken for actual zero generation."**
+
+**FILE: `backend/app/logic.py`, lines 151–166 — latest-forecast selection**
+
+**SAY**
+
+**"The latest forecast is calculated separately from the cutoff forecast. This lets us show the newest available prediction while preserving the forecast that would have been available at the purchasing decision time."**
+
+---
 
 ## 2D. Accuracy metrics and missing data
 **Time: 3:00–4:00**
 
-**CODE TO OPEN BEFORE SPEAKING**
-- `backend/app/logic.py`, lines **230–259** — `compute_metrics`.
-- Then lines **261–283** — percentile and uncertainty calculations.
-- Open `frontend/src/views/Accuracy.tsx`, line **191** — `connectNulls={false}`.
+**FILE: `backend/app/logic.py`, lines 230–259 — `compute_metrics`**
 
 **SAY**
 
-**"Next, we calculate the forecast error and the accuracy metrics. Throughout the application, the signed error is forecast minus actual generation. A positive value means we overforecast, and a negative value means we underforecast.**
+**"Next, we calculate forecast errors and accuracy metrics. Throughout the application, the signed error is forecast minus actual generation. A positive value means we overforecast, and a negative value means we underforecast.**
 
-**MAE measures the average absolute error, while RMSE gives more weight to larger errors. We also calculate percentage-based metrics where they are meaningful. For MAPE, we exclude very small actual generation values to avoid misleading percentages.**
+**MAE measures the average size of the error, while RMSE gives more weight to larger errors. We also calculate percentage-based metrics where they are meaningful."**
 
-**If a metric cannot be calculated reliably, we return an unavailable value rather than showing zero. We also require enough observations before presenting the uncertainty percentiles.**
+**FILE: `backend/app/logic.py`, line 43 and line 242 — MAPE threshold and calculation**
 
-**On the frontend, missing daily results appear as gaps in the chart, not as zero values. This prevents the chart from suggesting that generation or error was zero when we actually had no valid data."**
+**SAY**
+
+**"For MAPE, we exclude very small actual generation values because percentage errors can become misleading when the actual value is close to zero. We also report how many values were excluded."**
+
+**FILE: `backend/app/logic.py`, lines 261–283 — percentile and uncertainty calculations**
+
+**SAY**
+
+**"We calculate error percentiles to show how large forecast errors can become. However, we only show these uncertainty figures when there are enough observations. If there isn't enough data, we report that the result is unavailable instead of presenting an unreliable estimate."**
+
+**FILE: `frontend/src/views/Accuracy.tsx`, line 191 — `connectNulls={false}`**
+
+**SAY**
+
+**"There is also an important detail in the frontend. Days with missing results appear as gaps in the chart, rather than zeros. This avoids giving the impression that the error was zero when we actually had no valid data."**
+
+---
 
 ## 2E. Tests, reliability, and next steps
 **Time: 4:00–4:45**
 
-**ON SCREEN**
-1. Open `backend/tests/fixtures.py`.
-2. Show the backend test files and test results.
-3. Briefly show `backend/app/cache.py`, lines **22–33**.
-4. Finish at the README, with the setup and deployment instructions visible.
+**FILE: `backend/tests/fixtures.py` — test data**
 
 **SAY**
 
-**"We have 21 backend tests covering forecast cutoff selection, post-cutoff exclusion, duplicate records, timezone handling, metric calculations, and invalid API responses. The test fixtures are synthetic and clearly separated from live Elexon data.**
+**"We use test fixtures to check the application with controlled data. These fixtures are synthetic, and are kept separate from the live Elexon data."**
 
-**The API validates user inputs and returns useful error messages. When the upstream service fails, the backend returns an appropriate error response instead of exposing a traceback.**
+**ON SCREEN: Show the backend test files and the latest test results.**
 
-**We also cache API responses on disk for 24 hours, using the dataset and query parameters as the cache key. This reduces repeated requests and makes the application faster after the first load.**
+**SAY**
 
-**The next improvements would be more cutoff presets, a fully offline test mode, and completing the hosted deployment. The main goal was to build a clear, testable first version that handles forecast timing correctly and makes the results easy to review."**
+**"We have 21 backend tests covering forecast cutoff selection, excluding forecasts published too late, duplicate records, timezone handling, metric calculations, and invalid API responses."**
 
----
+**FILE: `backend/app/main.py`, lines 55–86 — request validation and error responses**
 
-# Final recording checklist
+**SAY**
 
-- [ ] Run `docker compose up --build`.
-- [ ] Open `http://localhost:8080` and verify the charts and tabs work.
-- [ ] Run `curl -s http://localhost:8000/api/health`.
-- [ ] Check that all displayed metrics match the current application.
-- [ ] Verify the specified file paths and line numbers in your current code.
-- [ ] Do not describe the January dataset as real-time data. Say **real Elexon data for January 2026**.
-- [ ] Confirm the public GitHub repository and deployed URL work in an incognito window.
-- [ ] Record Part 1 and Part 2, keeping each under five minutes.
-- [ ] Upload the video to YouTube as **Unlisted**, and verify the link in an incognito window.
-- [ ] Include the video, repository, and deployed application links in the submission form.
+**"The API validates user inputs and returns useful error messages. If the upstream service fails, the backend returns an appropriate error response instead of exposing a traceback to the user."**
+
+**FILE: `backend/app/cache.py`, lines 22–33 — filesystem cache**
+
+**SAY**
+
+**"We cache API responses on disk for 24 hours, using the dataset and query parameters as the cache key. This reduces repeated requests and makes the application faster after the first load."**
+
+**ON SCREEN: Return to the README and show the setup instructions and deployment configuration.**
+
+**SAY**
+
+**"The next improvements would be more cutoff presets, a fully offline test mode, and completing the hosted deployment. The goal was to build a clear and testable first version, with correct forecast timing and results that are easy to review."**
+
+
